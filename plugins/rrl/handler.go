@@ -34,6 +34,9 @@ func (rrl *RRL) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) 
 			RequestsExceeded.WithLabelValues(state.IP()).Add(1)
 			// always return success, to prevent writing of error statuses to client
 			if !rrl.reportOnly {
+				if rrl.rejectRequest {
+					return dns.RcodeRefused, errReqRateLimit
+				}
 				return dns.RcodeSuccess, errReqRateLimit
 			}
 		}

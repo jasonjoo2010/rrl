@@ -168,6 +168,12 @@ func rrlParse(c *caddy.Controller) (*RRL, error) {
 						return nil, c.ArgErr()
 					}
 					rrl.reportOnly = true
+				case "reject-request":
+					args := c.RemainingArgs()
+					if len(args) > 0 {
+						return nil, c.ArgErr()
+					}
+					rrl.rejectRequest = true
 				default:
 					if c.Val() != "}" {
 						return nil, c.Errf("unknown property '%s'", c.Val())

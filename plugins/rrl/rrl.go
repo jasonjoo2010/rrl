@@ -37,7 +37,8 @@ type RRL struct {
 
 	slipRatio uint
 
-	reportOnly bool
+	reportOnly    bool
+	rejectRequest bool
 
 	maxTableSize int
 

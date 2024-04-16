@@ -56,6 +56,7 @@ rrl [ZONES...] {
     requests-per-second ALLOWANCE
     max-table-size SIZE
     report-only
+    reject-request
 }
 ```
 
@@ -86,6 +87,8 @@ rrl [ZONES...] {
 * `max-table-size SIZE` - the maximum number of responses to be tracked at one time. When exceeded, rrl stops rate limiting new responses. Defaults to 100000.
 
 * `report-only` -  Do not drop requests/responses when rates are exceeded, only log metrics. Defaults to false.
+
+* `reject-request` - Actively reject requests when rates are exceeded instead of no-reply. It only works with `requests-per-second`. Defaults to false.
 
 ## Mitigate Wildcard Flooding with the metadata Plugin
 
