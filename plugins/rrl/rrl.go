@@ -180,7 +180,10 @@ func (rrl *RRL) debit(allowance int64, t string) (int64, bool, error) {
 				// balance can't be more negative than window
 				balance = -rrl.window
 			}
-			ra.allowTime = now - balance
+			if balance >= 0 {
+				// smooth requests
+				ra.allowTime = now - balance
+			}
 			if balance > 0 || ra.slipCountdown == 0 {
 				return balances{balance, false}
 			}

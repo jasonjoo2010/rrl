@@ -1,6 +1,7 @@
 package rrl
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -10,6 +11,25 @@ import (
 
 	"github.com/coredns/coredns/plugin/test"
 )
+
+func TestDebitRunning(t *testing.T) {
+	rrl := defaultRRL()
+	rrl.window = 5 * second
+	rrl.requestsInterval = second
+	rrl.table = cache.New(rrl.maxTableSize)
+	cnt := 0
+	for {
+		cnt++
+		b, _, err := rrl.debit(rrl.requestsInterval, "token1")
+		if err != nil {
+			t.Errorf("got error: %v", err)
+		}
+		if b >= 0 {
+			fmt.Println(b)
+		}
+		time.Sleep(80 * time.Millisecond)
+	}
+}
 
 func TestDebit(t *testing.T) {
 
