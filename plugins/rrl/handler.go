@@ -31,7 +31,7 @@ func (rrl *RRL) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) 
 		// if the balance is negative, drop the request (don't write response to client)
 		if b < 0 && err == nil {
 			log.Debugf("request rate exceeded from %v (token='%v', balance=%.1f)", state.IP(), t, float64(b)/float64(rrl.requestsInterval))
-			RequestsExceeded.WithLabelValues(state.IP()).Add(1)
+			RequestsExceeded.WithLabelValues(t).Add(1)
 			// always return success, to prevent writing of error statuses to client
 			if !rrl.reportOnly {
 				if rrl.rejectRequest {
@@ -70,7 +70,8 @@ func (rrl *RRL) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) 
 	if b < 0 && err == nil {
 		log.Debugf("response rate exceeded to %v for \"%v\" %v (token='%v', balance=%.1f)", nw.RemoteAddr().String(), nw.Msg.Question[0].String(), dns.RcodeToString[nw.Msg.Rcode], t, float64(b)/float64(allowance))
 		// always return success, to prevent writing of error statuses to client
-		ResponsesExceeded.WithLabelValues(state.IP()).Add(1)
+		clientIPPrefix := rrl.addrPrefix(state.IP())
+		ResponsesExceeded.WithLabelValues(clientIPPrefix).Add(1)
 		if !rrl.reportOnly {
 			if !slip {
 				// drop the response.  Return success, otherwise server will return an error response to client.
