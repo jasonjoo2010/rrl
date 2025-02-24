@@ -11,33 +11,43 @@ func TestSetupZones(t *testing.T) {
 	tests := []struct {
 		input     string
 		shouldErr bool
-		expected  RRL
+		expected  []*RRL
 	}{
 		{input: `rrl`,
 			shouldErr: false,
-			expected: RRL{
-				Zones: []string{},
+			expected: []*RRL{
+				{Zones: []string{}},
 			},
 		},
 		{input: `rrl {
 }`,
 			shouldErr: false,
-			expected: RRL{
-				Zones: []string{},
+			expected: []*RRL{
+				{Zones: []string{}},
 			},
 		},
 		{input: `rrl example.com {
 }`,
 			shouldErr: false,
-			expected: RRL{
-				Zones: []string{"example.com."},
+			expected: []*RRL{
+				{Zones: []string{"example.com."}},
+			},
+		},
+		{input: `rrl example.com {
+		}
+		rrl . {
+		}`,
+			shouldErr: false,
+			expected: []*RRL{
+				{Zones: []string{"example.com."}},
+				{Zones: []string{"."}},
 			},
 		},
 	}
 
 	for i, test := range tests {
 		c := caddy.NewTestController("dns", test.input)
-		rrl, err := rrlParse(c)
+		rrls, err := rrlParse(c)
 
 		if test.shouldErr && err == nil {
 			t.Errorf("Test %v: Expected error but found nil", i)
@@ -50,8 +60,14 @@ func TestSetupZones(t *testing.T) {
 			continue
 		}
 
-		if fmt.Sprintf("%v", rrl.Zones) != fmt.Sprintf("%v", test.expected.Zones) {
-			t.Errorf("Test %v: Expected Zones '%v' but found: '%v'", i, test.expected.Zones, rrl.Zones)
+		if len(rrls) != len(test.expected) {
+			t.Errorf("Test %v: Expected %d parsed records, but got %d", i, len(test.expected), len(rrls))
+			continue
+		}
+		for i, rrl := range rrls {
+			if fmt.Sprintf("%v", rrl.Zones) != fmt.Sprintf("%v", test.expected[i].Zones) {
+				t.Errorf("Test %v: Expected Zones '%v' but found: '%v'", i, test.expected[i].Zones, rrl.Zones)
+			}
 		}
 	}
 }
@@ -188,7 +204,7 @@ func TestSetupAllowances(t *testing.T) {
 
 	for i, test := range tests {
 		c := caddy.NewTestController("dns", test.input)
-		rrl, err := rrlParse(c)
+		rrls, err := rrlParse(c)
 
 		if test.shouldErr && err == nil {
 			t.Errorf("Test %v: Expected error but found nil", i)
@@ -201,6 +217,7 @@ func TestSetupAllowances(t *testing.T) {
 			continue
 		}
 
+		rrl := rrls[0]
 		if rrl.responsesInterval != test.expected.responsesInterval {
 			t.Errorf("Test %v: Expected responsesInterval %v but found: %v", i, test.expected.responsesInterval, rrl.responsesInterval)
 		}
@@ -259,7 +276,7 @@ func TestSetupWindow(t *testing.T) {
 
 	for i, test := range tests {
 		c := caddy.NewTestController("dns", test.input)
-		rrl, err := rrlParse(c)
+		rrls, err := rrlParse(c)
 
 		if test.shouldErr && err == nil {
 			t.Errorf("Test %v: Expected error but found nil", i)
@@ -272,6 +289,7 @@ func TestSetupWindow(t *testing.T) {
 			continue
 		}
 
+		rrl := rrls[0]
 		if rrl.window != test.expected.window {
 			t.Errorf("Test %v: Expected window %v but found: %v", i, test.expected.window, rrl.window)
 		}
@@ -350,7 +368,7 @@ func TestSetupPrefixes(t *testing.T) {
 
 	for i, test := range tests {
 		c := caddy.NewTestController("dns", test.input)
-		rrl, err := rrlParse(c)
+		rrls, err := rrlParse(c)
 
 		if test.shouldErr && err == nil {
 			t.Errorf("Test %v: Expected error but found nil", i)
@@ -363,6 +381,7 @@ func TestSetupPrefixes(t *testing.T) {
 			continue
 		}
 
+		rrl := rrls[0]
 		if fmt.Sprint(rrl.ipv4PrefixLength) != fmt.Sprint(test.expected.ipv4PrefixLength) {
 			t.Errorf("Test %v: Expected ipv4PrefixLength %v but found: %v", i, fmt.Sprint(test.expected.ipv4PrefixLength), fmt.Sprint(rrl.ipv4PrefixLength))
 		}
@@ -410,7 +429,7 @@ func TestSetupTableSize(t *testing.T) {
 
 	for i, test := range tests {
 		c := caddy.NewTestController("dns", test.input)
-		rrl, err := rrlParse(c)
+		rrls, err := rrlParse(c)
 
 		if test.shouldErr && err == nil {
 			t.Errorf("Test %v: Expected error but found nil", i)
@@ -423,6 +442,7 @@ func TestSetupTableSize(t *testing.T) {
 			continue
 		}
 
+		rrl := rrls[0]
 		if rrl.maxTableSize != test.expected.maxTableSize {
 			t.Errorf("Test %v: Expected maxTableSize %v but found: %v", i, test.expected.maxTableSize, rrl.maxTableSize)
 		}
@@ -473,7 +493,7 @@ func TestSetupSlipRatio(t *testing.T) {
 
 	for i, test := range tests {
 		c := caddy.NewTestController("dns", test.input)
-		rrl, err := rrlParse(c)
+		rrls, err := rrlParse(c)
 
 		if test.shouldErr && err == nil {
 			t.Errorf("Test %v: Expected error but found nil", i)
@@ -486,6 +506,7 @@ func TestSetupSlipRatio(t *testing.T) {
 			continue
 		}
 
+		rrl := rrls[0]
 		if rrl.slipRatio != test.expected.slipRatio {
 			t.Errorf("Test %v: Expected slipRatio %v but found: %v", i, test.expected.slipRatio, rrl.slipRatio)
 		}

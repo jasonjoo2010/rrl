@@ -19,15 +19,27 @@ func init() {
 }
 
 func setup(c *caddy.Controller) error {
-	e, err := rrlParse(c)
+	rrls, err := rrlParse(c)
 	if err != nil {
 		return plugin.Error("rrl", err)
 	}
 
-	dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
-		e.Next = next
-		return e
-	})
+	for i := range rrls {
+		f := rrls[i]
+		if i == len(rrls)-1 {
+			// last
+			dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
+				f.Next = next
+				return f
+			})
+		} else {
+			n := rrls[i+1]
+			dnsserver.GetConfig(c).AddPlugin(func(plugin.Handler) plugin.Handler {
+				f.Next = n
+				return f
+			})
+		}
+	}
 
 	return nil
 }
@@ -41,8 +53,8 @@ func defaultRRL() RRL {
 	}
 }
 
-func rrlParse(c *caddy.Controller) (*RRL, error) {
-	rrl := defaultRRL()
+func rrlParse(c *caddy.Controller) ([]*RRL, error) {
+	rrls := []*RRL{}
 
 	var (
 		nodataIntervalSet    bool
@@ -52,136 +64,125 @@ func rrlParse(c *caddy.Controller) (*RRL, error) {
 	)
 
 	for c.Next() {
+		rrl := defaultRRL()
 		rrl.Zones = plugin.OriginsFromArgsOrServerBlock(c.RemainingArgs(), c.ServerBlockKeys)
 
-		if c.NextBlock() {
-			for {
-				switch c.Val() {
-				case "window":
-					args := c.RemainingArgs()
-					if len(args) != 1 {
-						return nil, c.ArgErr()
-					}
-					w, err := strconv.ParseFloat(args[0], 64)
-					if err != nil {
-						return nil, c.Errf("%v invalid value. %v", c.Val(), err)
-					}
-					if w <= 0 {
-						return nil, c.Err("window must be greater than zero")
-					}
-					rrl.window = int64(w * second)
-				case "ipv4-prefix-length":
-					args := c.RemainingArgs()
-					if len(args) != 1 {
-						return nil, c.ArgErr()
-					}
-					i, err := strconv.Atoi(c.Val())
-					if err != nil {
-						return nil, c.Errf("%v invalid value. %v", c.Val(), err)
-					}
-					if i <= 0 || i > 32 {
-						return nil, c.Errf("%v must be between 1 and 32", c.Val())
-					}
-					rrl.ipv4PrefixLength = i
-				case "ipv6-prefix-length":
-					args := c.RemainingArgs()
-					if len(args) != 1 {
-						return nil, c.ArgErr()
-					}
-					i, err := strconv.Atoi(c.Val())
-					if err != nil {
-						return nil, c.Errf("%v invalid value. %v", c.Val(), err)
-					}
-					if i <= 0 || i > 128 {
-						return nil, c.Errf("%v must be between 1 and 128", c.Val())
-					}
-					rrl.ipv6PrefixLength = i
-				case "responses-per-second":
-					i, err := getIntervalArg(c)
-					if err != nil {
-						return nil, err
-					}
-					rrl.responsesInterval = i
-				case "nodata-per-second":
-					i, err := getIntervalArg(c)
-					if err != nil {
-						return nil, err
-					}
-					rrl.nodataInterval = i
-					nodataIntervalSet = true
-				case "nxdomains-per-second":
-					i, err := getIntervalArg(c)
-					if err != nil {
-						return nil, err
-					}
-					rrl.nxdomainsInterval = i
-					nxdomainsIntervalSet = true
-				case "referrals-per-second":
-					i, err := getIntervalArg(c)
-					if err != nil {
-						return nil, err
-					}
-					rrl.referralsInterval = i
-					referralsIntervalSet = true
-				case "errors-per-second":
-					i, err := getIntervalArg(c)
-					if err != nil {
-						return nil, err
-					}
-					rrl.errorsInterval = i
-					errorsIntervalSet = true
-				case "slip-ratio":
-					args := c.RemainingArgs()
-					if len(args) != 1 {
-						return nil, c.ArgErr()
-					}
-					i, err := strconv.Atoi(c.Val())
-					if err != nil {
-						return nil, c.Errf("slip-ratio '%v' invalid value. %v", c.Val(), err)
-					}
-					if i < 0 || i > 10 {
-						return nil, c.Errf("slip-ratio '%v' must be between 0 and 10", c.Val())
-					}
-					rrl.slipRatio = uint(i)
-				case "requests-per-second":
-					i, err := getIntervalArg(c)
-					if err != nil {
-						return nil, err
-					}
-					rrl.requestsInterval = i
-				case "max-table-size":
-					args := c.RemainingArgs()
-					if len(args) != 1 {
-						return nil, c.ArgErr()
-					}
-					i, err := strconv.Atoi(args[0])
-					if err != nil {
-						return nil, c.Errf("%v invalid value. %v", c.Val(), err)
-					}
-					if i < 0 {
-						return nil, c.Errf("%v cannot be negative", c.Val())
-					}
-					rrl.maxTableSize = i
-				case "report-only":
-					args := c.RemainingArgs()
-					if len(args) > 0 {
-						return nil, c.ArgErr()
-					}
-					rrl.reportOnly = true
-				case "reject-request":
-					args := c.RemainingArgs()
-					if len(args) > 0 {
-						return nil, c.ArgErr()
-					}
-					rrl.rejectRequest = true
-				default:
-					if c.Val() != "}" {
-						return nil, c.Errf("unknown property '%s'", c.Val())
-					}
+		for c.NextBlock() {
+			switch c.Val() {
+			case "window":
+				args := c.RemainingArgs()
+				if len(args) != 1 {
+					return nil, c.ArgErr()
 				}
-
-				if !c.Next() {
-					break
+				w, err := strconv.ParseFloat(args[0], 64)
+				if err != nil {
+					return nil, c.Errf("%v invalid value. %v", c.Val(), err)
+				}
+				if w <= 0 {
+					return nil, c.Err("window must be greater than zero")
+				}
+				rrl.window = int64(w * second)
+			case "ipv4-prefix-length":
+				args := c.RemainingArgs()
+				if len(args) != 1 {
+					return nil, c.ArgErr()
+				}
+				i, err := strconv.Atoi(c.Val())
+				if err != nil {
+					return nil, c.Errf("%v invalid value. %v", c.Val(), err)
+				}
+				if i <= 0 || i > 32 {
+					return nil, c.Errf("%v must be between 1 and 32", c.Val())
+				}
+				rrl.ipv4PrefixLength = i
+			case "ipv6-prefix-length":
+				args := c.RemainingArgs()
+				if len(args) != 1 {
+					return nil, c.ArgErr()
+				}
+				i, err := strconv.Atoi(c.Val())
+				if err != nil {
+					return nil, c.Errf("%v invalid value. %v", c.Val(), err)
+				}
+				if i <= 0 || i > 128 {
+					return nil, c.Errf("%v must be between 1 and 128", c.Val())
+				}
+				rrl.ipv6PrefixLength = i
+			case "responses-per-second":
+				i, err := getIntervalArg(c)
+				if err != nil {
+					return nil, err
+				}
+				rrl.responsesInterval = i
+			case "nodata-per-second":
+				i, err := getIntervalArg(c)
+				if err != nil {
+					return nil, err
+				}
+				rrl.nodataInterval = i
+				nodataIntervalSet = true
+			case "nxdomains-per-second":
+				i, err := getIntervalArg(c)
+				if err != nil {
+					return nil, err
+				}
+				rrl.nxdomainsInterval = i
+				nxdomainsIntervalSet = true
+			case "referrals-per-second":
+				i, err := getIntervalArg(c)
+				if err != nil {
+					return nil, err
+				}
+				rrl.referralsInterval = i
+				referralsIntervalSet = true
+			case "errors-per-second":
+				i, err := getIntervalArg(c)
+				if err != nil {
+					return nil, err
+				}
+				rrl.errorsInterval = i
+				errorsIntervalSet = true
+			case "slip-ratio":
+				args := c.RemainingArgs()
+				if len(args) != 1 {
+					return nil, c.ArgErr()
+				}
+				i, err := strconv.Atoi(c.Val())
+				if err != nil {
+					return nil, c.Errf("slip-ratio '%v' invalid value. %v", c.Val(), err)
+				}
+				if i < 0 || i > 10 {
+					return nil, c.Errf("slip-ratio '%v' must be between 0 and 10", c.Val())
+				}
+				rrl.slipRatio = uint(i)
+			case "requests-per-second":
+				i, err := getIntervalArg(c)
+				if err != nil {
+					return nil, err
+				}
+				rrl.requestsInterval = i
+			case "max-table-size":
+				args := c.RemainingArgs()
+				if len(args) != 1 {
+					return nil, c.ArgErr()
+				}
+				i, err := strconv.Atoi(args[0])
+				if err != nil {
+					return nil, c.Errf("%v invalid value. %v", c.Val(), err)
+				}
+				if i < 0 {
+					return nil, c.Errf("%v cannot be negative", c.Val())
+				}
+				rrl.maxTableSize = i
+			case "report-only":
+				args := c.RemainingArgs()
+				if len(args) > 0 {
+					return nil, c.ArgErr()
+				}
+				rrl.reportOnly = true
+			default:
+				if c.Val() != "}" {
+					return nil, c.Errf("unknown property '%s'", c.Val())
 				}
 			}
 		}
@@ -202,10 +203,9 @@ func rrlParse(c *caddy.Controller) (*RRL, error) {
 
 		// initialize table
 		rrl.initTable()
-
-		return &rrl, nil
+		rrls = append(rrls, &rrl)
 	}
-	return nil, nil
+	return rrls, nil
 }
 
 func getIntervalArg(c *caddy.Controller) (int64, error) {
